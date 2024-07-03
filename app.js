@@ -1,6 +1,7 @@
 const appID = "260144635bc76c73";
 const region = "US";
 const authKey = "d019a6272078f064b664f028fa2d0266f029de44";
+const restApiKey = "6483aa58cf39a32bfa81afb2847c8974a9e653b0";
 
 // Inicializar o CometChat
 const appSetting = new CometChat.AppSettingsBuilder()
@@ -31,7 +32,7 @@ CometChat.init(appID, appSetting).then(
                 );
             },
             error => {
-                if(error.code === "ERR_UID_ALREADY_EXISTS") {
+                if (error.code === "ERR_UID_ALREADY_EXISTS") {
                     CometChat.login(UID, authKey).then(
                         user => {
                             console.log("Login successful", user);
