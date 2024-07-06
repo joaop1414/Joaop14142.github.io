@@ -1,22 +1,265 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat App</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Jogo da Cobrinha Multiplayer</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #menu, #gameContainer {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+        #menu.active, #gameContainer.active {
+            display: flex;
+        }
+        canvas {
+            border: 1px solid #000;
+            background-color: #fff;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        .controls button {
+            padding: 15px;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            width: 60px;
+            height: 60px;
+        }
+        .controls button:active {
+            background-color: #45a049;
+        }
+        .arrow {
+            width: 24px;
+            height: 24px;
+        }
+        .menu-button, #resetButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        .menu-button:active, #resetButton:active {
+            background-color: #45a049;
+        }
+        #resetButton {
+            display: none;
+        }
+        select {
+            margin-top: 20px;
+            padding: 10px;
+            font-size: 16px;
+        }
+    </style>
 </head>
 <body>
-    <div id="chat-container">
-        <div id="chat-window">
-            <ul id="messages"></ul>
-        </div>
-        <form id="message-form">
-            <input id="message-input" type="text" placeholder="Type your message..." autocomplete="off">
-            <button type="submit">Send</button>
-        </form>
+    <div id="menu" class="active">
+        <h1>Jogo da Cobrinha Multiplayer</h1>
+        <label for="difficulty">Selecione a Dificuldade:</label>
+        <select id="difficulty">
+            <option value="1">Fácil</option>
+            <option value="2">Normal</option>
+            <option value="3">Difícil</option>
+        </select>
+        <button class="menu-button" onclick="startGame()">Iniciar Jogo</button>
     </div>
-    <script src="https://unpkg.com/@cometchat-pro/chat@2.3.1/CometChat.js"></script>
-    <script src="app.js"></script>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+            <button></button> <!-- Placeholder for layout -->
+            <button onclick="changeDirection('up')">
+                <img src="https://img.icons8.com/ios-filled/50/000000/up.png" alt="Up" class="arrow">
+            </button>
+            <button></button> <!-- Placeholder for layout -->
+            <button onclick="changeDirection('left')">
+                <img src="https://img.icons8.com/ios-filled/50/000000/left.png" alt="Left" class="arrow">
+            </button>
+            <button></button> <!-- Placeholder for layout -->
+            <button onclick="changeDirection('right')">
+                <img src="https://img.icons8.com/ios-filled/50/000000/right.png" alt="Right" class="arrow">
+            </button>
+            <button></button> <!-- Placeholder for layout -->
+            <button onclick="changeDirection('down')">
+                <img src="https://img.icons8.com/ios-filled/50/000000/down.png" alt="Down" class="arrow">
+            </button>
+        </div>
+        <button id="resetButton" onclick="resetGame()">Resetar</button>
+    </div>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const resetButton = document.getElementById("resetButton");
+        const menu = document.getElementById("menu");
+        const gameContainer = document.getElementById("gameContainer");
+        const difficultySelect = document.getElementById("difficulty");
+
+        const box = 20;
+        let snake;
+        let direction;
+        let food;
+        let game;
+        let gameSpeed;
+
+        let ws = new WebSocket('ws://localhost:8080');
+        
+        ws.onmessage = function(event) {
+            let message = JSON.parse(event.data);
+            if (message.type === 'update') {
+                snake = message.snake;
+                food = message.food;
+                direction = message.direction;
+            }
+        };
+
+        function initGame() {
+            snake = [{ x: 9 * box, y: 10 * box }];
+            direction = "right";
+            food = {
+                x: Math.floor(Math.random() * 19 + 1) * box,
+                y: Math.floor(Math.random() * 19 + 1) * box
+            };
+            resetButton.style.display = 'none';
+            game = setInterval(draw, gameSpeed);
+        }
+
+        function startGame() {
+            const difficulty = difficultySelect.value;
+            gameSpeed = 200 / difficulty; // Adjust the speed based on difficulty
+            menu.classList.remove("active");
+            gameContainer.classList.add("active");
+            initGame();
+        }
+
+        document.addEventListener("keydown", directionHandler);
+
+        function directionHandler(event) {
+            if (event.keyCode == 37 && direction != "right") {
+                direction = "left";
+                sendDirection(direction);
+            } else if (event.keyCode == 38 && direction != "down") {
+                direction = "up";
+                sendDirection(direction);
+            } else if (event.keyCode == 39 && direction != "left") {
+                direction = "right";
+                sendDirection(direction);
+            } else if (event.keyCode == 40 && direction != "up") {
+                direction = "down";
+                sendDirection(direction);
+            }
+        }
+
+        function changeDirection(newDirection) {
+            if (newDirection == "left" && direction != "right") {
+                direction = "left";
+            } else if (newDirection == "up" && direction != "down") {
+                direction = "up";
+            } else if (newDirection == "right" && direction != "left") {
+                direction = "right";
+            } else if (newDirection == "down" && direction != "up") {
+                direction = "down";
+            }
+            sendDirection(direction);
+        }
+
+        function sendDirection(direction) {
+            ws.send(JSON.stringify({ type: 'direction', direction: direction }));
+        }
+
+        function draw() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = i == 0 ? "green" : "lightgreen";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+
+                ctx.strokeStyle = "white";
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(food.x, food.y, box, box);
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (direction == "left") snakeX -= box;
+            if (direction == "up") snakeY -= box;
+            if (direction == "right") snakeX += box;
+            if (direction == "down") snakeY += box;
+
+            if (snakeX == food.x && snakeY == food.y) {
+                food = {
+                    x: Math.floor(Math.random() * 19 + 1) * box,
+                    y: Math.floor(Math.random() * 19 + 1) * box
+                };
+            } else {
+                snake.pop();
+            }
+
+            let newHead = {
+                x: snakeX,
+                y: snakeY
+            };
+
+            if (snakeX < 0 || snakeY < 0 || snakeX >= canvas.width || snakeY >= canvas.height || collision(newHead, snake)) {
+                clearInterval(game);
+                resetButton.style.display = 'block';
+                ws.send(JSON.stringify({ type: 'reset' }));
+            }
+
+            snake.unshift(newHead);
+            ws.send(JSON.stringify({ type: 'update', snake: snake, food: food, direction: direction }));
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function resetGame() {
+            clearInterval(game);
+            menu.classList.add("active");
+            gameContainer.classList.remove("active");
+        }
+
+        ws.onclose = function() {
+            alert('Connection closed.');
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket error: ', error);
+        };
+    </script>
 </body>
 </html>
