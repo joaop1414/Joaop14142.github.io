@@ -15,12 +15,12 @@
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
         }
-        #menu, #gameContainer {
+        #menu, #gameContainer, #multiplayerMenu {
             display: none;
             flex-direction: column;
             align-items: center;
         }
-        #menu.active, #gameContainer.active {
+        #menu.active, #gameContainer.active, #multiplayerMenu.active {
             display: flex;
         }
         canvas {
@@ -55,7 +55,7 @@
             width: 24px;
             height: 24px;
         }
-        .menu-button, #resetButton {
+        .menu-button, #resetButton, .multiplayer-button, .create-room-button {
             margin-top: 20px;
             padding: 10px 20px;
             font-size: 16px;
@@ -65,7 +65,7 @@
             border: none;
             border-radius: 5px;
         }
-        .menu-button:active, #resetButton:active {
+        .menu-button:active, #resetButton:active, .multiplayer-button:active, .create-room-button:active {
             background-color: #45a049;
         }
         #resetButton {
@@ -75,6 +75,33 @@
             margin-top: 20px;
             padding: 10px;
             font-size: 16px;
+        }
+        #multiplayerMenu {
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+        }
+        #createRoomContainer {
+            width: 80%;
+            max-width: 500px;
+            height: 70%;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        #createRoomContainer h2 {
+            margin-bottom: 20px;
+        }
+        #playerName {
+            margin-bottom: 20px;
+            padding: 10px;
+            font-size: 16px;
+            width: 100%;
         }
     </style>
 </head>
@@ -88,6 +115,7 @@
             <option value="3">Difícil</option>
         </select>
         <button class="menu-button" onclick="startGame()">Iniciar Jogo</button>
+        <button class="multiplayer-button" onclick="showMultiplayerMenu()">Multiplayer</button>
     </div>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="400" height="400"></canvas>
@@ -111,13 +139,24 @@
         </div>
         <button id="resetButton" onclick="resetGame()">Resetar</button>
     </div>
+    <div id="multiplayerMenu">
+        <div id="createRoomContainer">
+            <h2>Multiplayer</h2>
+            <label for="playerName">Nome do Jogador:</label>
+            <input type="text" id="playerName" placeholder="Digite seu nome">
+            <button class="create-room-button" onclick="createRoom()">Criar Sala</button>
+        </div>
+        <button class="menu-button" onclick="goToMenu()">Voltar ao Menu</button>
+    </div>
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
         const resetButton = document.getElementById("resetButton");
         const menu = document.getElementById("menu");
         const gameContainer = document.getElementById("gameContainer");
+        const multiplayerMenu = document.getElementById("multiplayerMenu");
         const difficultySelect = document.getElementById("difficulty");
+        const playerNameInput = document.getElementById("playerName");
 
         const box = 20;
         let snake;
@@ -127,6 +166,7 @@
         let gameSpeed;
 
         let ws;
+        let playerName = '';
 
         function initWebSocket() {
             ws = new WebSocket('ws://localhost:8080');
@@ -168,9 +208,31 @@
         function startGame() {
             const difficulty = difficultySelect.value;
             gameSpeed = 200 / difficulty; // Ajuste a velocidade com base na dificuldade
+            playerName = '';
             menu.classList.remove("active");
             gameContainer.classList.add("active");
             initGame();
+        }
+
+        function showMultiplayerMenu() {
+            menu.classList.remove("active");
+            multiplayerMenu.classList.add("active");
+        }
+
+        function goToMenu() {
+            multiplayerMenu.classList.remove("active");
+            menu.classList.add("active");
+        }
+
+        function createRoom() {
+            playerName = playerNameInput.value.trim();
+            if (!playerName) {
+                alert("Digite seu nome.");
+                return;
+            }
+            ws.send(JSON.stringify({ type: 'createRoom', playerName: playerName }));
+            alert("Sala criada. Aguarde outros jogadores.");
+            // Aqui você pode redirecionar para uma tela de espera ou outra funcionalidade
         }
 
         document.addEventListener("keydown", directionHandler);
@@ -187,43 +249,40 @@
                 sendDirection(direction);
             } else if (event.keyCode == 40 && direction != "up") {
                 direction = "down";
+                sendDirection(direction);}
+        }
+
+        function changeDirection(dir) {
+            if (dir === 'left' && direction !== 'right') {
+                direction = 'left';
+                sendDirection(direction);
+            } else if (dir === 'right' && direction !== 'left') {
+                direction = 'right';
+                sendDirection(direction);
+            } else if (dir === 'up' && direction !== 'down') {
+                direction = 'up';
+                sendDirection(direction);
+            } else if (dir === 'down' && direction !== 'up') {
+                direction = 'down';
                 sendDirection(direction);
             }
         }
 
-        function changeDirection(newDirection) {
-            if (newDirection == "left" && direction != "right") {
-                direction = "left";
-            } else if (newDirection == "up" && direction != "down") {
-                direction = "up";
-            } else if (newDirection == "right" && direction != "left") {
-                direction = "right";
-            } else if (newDirection == "down" && direction != "up") {
-                direction = "down";
-            }
-            sendDirection(direction);
-        }
-
         function sendDirection(direction) {
-            ws.send(JSON.stringify({ type: 'direction', direction: direction }));
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'direction', direction: direction }));
+            } else {
+                console.error('WebSocket is not connected.');
+            }
         }
 
         function draw() {
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            for (let i = 0; i < snake.length; i++) {
-                ctx.fillStyle = "green";
-                ctx.fillRect(snake[i].x, snake[i].y, box, box);
-            }
-
-            ctx.fillStyle = "red";
-            ctx.fillRect(food.x, food.y, box, box);
-
-            if (direction == "left") snake[0].x -= box;
-            if (direction == "right") snake[0].x += box;
-            if (direction == "up") snake[0].y -= box;
-            if (direction == "down") snake[0].y += box;
+            if (direction === "left") snake[0].x -= box;
+            if (direction === "right") snake[0].x += box;
+            if (direction === "up") snake[0].y -= box;
+            if (direction === "down") snake[0].y += box;
 
             // Verifica colisão com a borda do canvas
             if (snake[0].x < 0 || snake[0].x >= canvas.width || snake[0].y < 0 || snake[0].y >= canvas.height) {
