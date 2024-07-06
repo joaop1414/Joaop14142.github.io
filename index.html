@@ -126,16 +126,32 @@
         let game;
         let gameSpeed;
 
-        let ws = new WebSocket('ws://localhost:8080');
-        
-        ws.onmessage = function(event) {
-            let message = JSON.parse(event.data);
-            if (message.type === 'update') {
-                snake = message.snake;
-                food = message.food;
-                direction = message.direction;
-            }
-        };
+        let ws;
+
+        function initWebSocket() {
+            ws = new WebSocket('ws://localhost:8080');
+
+            ws.onopen = function() {
+                console.log('WebSocket connection established.');
+            };
+
+            ws.onmessage = function(event) {
+                let message = JSON.parse(event.data);
+                if (message.type === 'update') {
+                    snake = message.snake;
+                    food = message.food;
+                    direction = message.direction;
+                }
+            };
+
+            ws.onclose = function() {
+                alert('Connection closed.');
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error: ', error);
+            };
+        }
 
         function initGame() {
             snake = [{ x: 9 * box, y: 10 * box }];
@@ -145,12 +161,13 @@
                 y: Math.floor(Math.random() * 19 + 1) * box
             };
             resetButton.style.display = 'none';
+            initWebSocket();
             game = setInterval(draw, gameSpeed);
         }
 
         function startGame() {
             const difficulty = difficultySelect.value;
-            gameSpeed = 200 / difficulty; // Adjust the speed based on difficulty
+            gameSpeed = 200 / difficulty; // Ajuste a velocidade com base na dificuldade
             menu.classList.remove("active");
             gameContainer.classList.add("active");
             initGame();
@@ -196,70 +213,61 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             for (let i = 0; i < snake.length; i++) {
-                ctx.fillStyle = i == 0 ? "green" : "lightgreen";
+                ctx.fillStyle = "green";
                 ctx.fillRect(snake[i].x, snake[i].y, box, box);
-
-                ctx.strokeStyle = "white";
-                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
             }
 
             ctx.fillStyle = "red";
             ctx.fillRect(food.x, food.y, box, box);
 
-            let snakeX = snake[0].x;
-            let snakeY = snake[0].y;
+            if (direction == "left") snake[0].x -= box;
+            if (direction == "right") snake[0].x += box;
+            if (direction == "up") snake[0].y -= box;
+            if (direction == "down") snake[0].y += box;
 
-            if (direction == "left") snakeX -= box;
-            if (direction == "up") snakeY -= box;
-            if (direction == "right") snakeX += box;
-            if (direction == "down") snakeY += box;
+            // Verifica colisão com a borda do canvas
+            if (snake[0].x < 0 || snake[0].x >= canvas.width || snake[0].y < 0 || snake[0].y >= canvas.height) {
+                clearInterval(game);
+                alert("Game Over");
+                resetButton.style.display = 'block';
+                return;
+            }
 
-            if (snakeX == food.x && snakeY == food.y) {
+            // Verifica colisão com a própria cobra
+            for (let i = 1; i < snake.length; i++) {
+                if (snake[0].x === snake[i].x && snake[0].y === snake[i].y) {
+                    clearInterval(game);
+                    alert("Game Over");
+                    resetButton.style.display = 'block';
+                    return;
+                }
+            }
+
+            // Verifica se a cobra comeu a comida
+            if (snake[0].x === food.x && snake[0].y === food.y) {
                 food = {
                     x: Math.floor(Math.random() * 19 + 1) * box,
                     y: Math.floor(Math.random() * 19 + 1) * box
                 };
+                ws.send(JSON.stringify({ type: 'food', food: food }));
             } else {
                 snake.pop();
             }
 
-            let newHead = {
-                x: snakeX,
-                y: snakeY
-            };
+            // Atualiza o canvas com a nova posição da cobra e da comida
+            ctx.fillStyle = "red";
+            ctx.fillRect(food.x, food.y, box, box);
 
-            if (snakeX < 0 || snakeY < 0 || snakeX >= canvas.width || snakeY >= canvas.height || collision(newHead, snake)) {
-                clearInterval(game);
-                resetButton.style.display = 'block';
-                ws.send(JSON.stringify({ type: 'reset' }));
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = "green";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
             }
-
-            snake.unshift(newHead);
-            ws.send(JSON.stringify({ type: 'update', snake: snake, food: food, direction: direction }));
-        }
-
-        function collision(head, array) {
-            for (let i = 0; i < array.length; i++) {
-                if (head.x == array[i].x && head.y == array[i].y) {
-                    return true;
-                }
-            }
-            return false;
         }
 
         function resetGame() {
             clearInterval(game);
-            menu.classList.add("active");
-            gameContainer.classList.remove("active");
+            initGame();
         }
-
-        ws.onclose = function() {
-            alert('Connection closed.');
-        };
-
-        ws.onerror = function(error) {
-            console.error('WebSocket error: ', error);
-        };
     </script>
 </body>
 </html>
