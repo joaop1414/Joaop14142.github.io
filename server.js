@@ -21,6 +21,10 @@ server.on('connection', (ws) => {
         clients = clients.filter(client => client !== ws);
         console.log('Client disconnected.');
     });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error: ', error);
+    });
 });
 
 console.log('WebSocket server is running on ws://localhost:8080');
